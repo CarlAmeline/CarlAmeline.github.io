@@ -1,0 +1,116 @@
+<html>
+    <head>
+        <title>WebSocket Leaflet Visualisation</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+   integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+   crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+ integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+ crossorigin=""></script>
+</head>
+<body>
+    <div id="map" style="height: 90%;width: 100%;"></div>
+    <d>
+        <textarea id="debug"></textarea>
+    </d>
+    <script>
+        var map = L.map('map').setView([51.505,-0.09], 13);
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+            maxNativeZoom:19,
+            maxZoom: 25,
+    id: 'mapbox/streets-v11',
+    tileSize: 512,
+    zoomOffset: -1,
+    accessToken: 'pk.eyJ1IjoiZmV6YzAiLCJhIjoiY2wyMGdpYmUwMHczNzNibXpxd2hmOTlxdiJ9.iG3pjl5B_BEtnlE8ldcnhw'
+}).addTo(map);
+
+    var wsUri = "ws://localhost:1234";
+    var websocket = null;
+    var marker = L.marker(map.getCenter()).addTo(map);
+    var debug = document.getElementById("debug")
+    var array = Array();
+
+    function updateData(lon, lat, fixtypelong)
+    {
+        var lonDouble = parseFloat(lon);
+        var latDouble = parseFloat(lat);
+        marker.setLatLng([latDouble, lonDouble]).update();
+        map.flyTo([latDouble, lonDouble], map.getZoom());
+
+        
+        var split = fixtypelong.split(':');
+        var fixtype = split[0];
+        debug.value = fixtype
+
+        var pin
+        if (fixtype == "Invalid")
+            pin = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png'
+        else if (fixtype == "GPS" || fixtype == "DGPS")
+            pin =  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png'
+        else if (fixtype == "PPS")
+            pin =  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png'
+        else if (fixtype == "RTK")
+            pin =  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png'
+        else if (fixtype == "FloatRTK")
+            pin =  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png'
+        else
+            pin =  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png'
+        
+        var icon = new L.icon({
+            iconUrl : pin,
+            shadowUrl : 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize : [25,41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        marker.setIcon(icon);
+        var text = "<b>" + fixtypelong +"</b><br>" + lat + ";" + lon
+        marker.bindPopup(text);
+        array.push(marker.getLatLng());
+        var polyline = L.polyline(array, {color : 'red'}).addTo(map);
+    }
+
+    function initWebSocket() {
+        console.log("initwebsocket");
+        try {
+            if (typeof MozWebSocket == 'function')
+                WebSocket = MozWebSocket;
+            if (websocket && websocket.readyState == 1)
+                websocket.close();
+            websocket = new WebSocket(wsUri);
+            websocket.onopen = function(evt) {
+                updateData("CONNECTED", "");
+            }; 
+            websocket.onclose = function(evt) {
+                updateData("DISCONNECTED", "");
+            }
+            websocket.onmessage = function(evt) {
+                const objGPS = JSON.parse(evt.data);
+                console.log(evt.data);
+                updateData(objGPS.GPS.LON, objGPS.GPS.LAT, objGPS.GPS.STATUS);
+            }
+        } catch (exception) {
+            console.log(exception);
+        }
+    }
+    
+    function stopWebSocket()
+    {
+        if (websocket)
+            websocket.close();
+    }
+    </script>
+    <script defer>
+        console.log("on start")
+        initWebSocket();
+    </script>
+</body>
+</html>
+
+<!--
+    Todo
+    changer le zoom max
+    tracabilité du pin
+-->
